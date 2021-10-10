@@ -39,6 +39,7 @@ class IType:
         self.immed = line[16:32]
 
 def main(inputStr):
+    hasError = False
     # dictionary of are R_Type and I_Type binary equivalents
     r_type_op_codes = {  '100000':'add',
                 '100001':'addu',
@@ -116,6 +117,7 @@ def main(inputStr):
         str1 = line.strip()
         if (len(str1) != 8):
             print("Cannot dissassemble " + str1 + " at line " + str(lineCounter) + " due to invalid length.")
+            hasError = True
         else:
             res = "{0:08b}".format(int(str1, 16)) # converts the hex string into binary
             resFilled = res.zfill(32) # fills the result with any leading zeros
@@ -136,53 +138,67 @@ def main(inputStr):
             isRType = False
 
         if isRType:
-
-            op_str = r_type_op_codes[my_rtype.funct]
-            rs_str = register_dict[my_rtype.rs]
-            rt_str = register_dict[my_rtype.rt]
-            rd_str = register_dict[my_rtype.rd]
-            shamt_str = int(my_rtype.shamt,2)
-            
-            temp_int = int(my_rtype.funct,2)
-            funct_str = hex(temp_int)
-
-            if (shamt_str == 0):
-                tempOutputList[programCounter] = "\t" + op_str + " " + rd_str + ", " + rs_str + ", " + rt_str  + "\n"
+            if  (r_type_op_codes.get(my_rtype.funct) is None) or (register_dict.get(my_rtype.rs) is None) or (register_dict.get(my_rtype.rt) is None) or (register_dict.get(my_rtype.rd) is None):
+                str2 = (f[lineCounter-1]).strip()
+                print("Cannot dissassemble " + str2 + " at line " + str(lineCounter) + " due to invalid input.")
+                hasError = True
             else:
-                tempOutputList[programCounter] = "\t" + op_str + " " + rd_str + ", " + rt_str + ", " + str(shamt_str) + "\n"
+                op_str = r_type_op_codes[my_rtype.funct]
+                rs_str = register_dict[my_rtype.rs]
+                rt_str = register_dict[my_rtype.rt]
+                rd_str = register_dict[my_rtype.rd]
+                shamt_str = int(my_rtype.shamt,2)
+                
+                temp_int = int(my_rtype.funct,2)
+                funct_str = hex(temp_int)
+
+                if (shamt_str == 0):
+                    tempOutputList[programCounter] = "\t" + op_str + " " + rd_str + ", " + rs_str + ", " + rt_str  + "\n"
+                else:
+                    tempOutputList[programCounter] = "\t" + op_str + " " + rd_str + ", " + rt_str + ", " + str(shamt_str) + "\n"
 
         # IType case
         else: 
-            op_str = i_type_op_codes[my_itype.op]
-            rs_str = register_dict[my_itype.rs]
-            rt_str = register_dict[my_itype.rt]
-            immed_str = int(my_itype.immed,2)
-            if (immed_str > 60000):
-                immed_str = immed_str-65536
-
-            if (op_str == "lw" or op_str == "sw"):
-                tempOutputList[programCounter] = "\t" + op_str + " " + rt_str + ", " + str(immed_str) + "(" + rs_str + ")" + "\n"
-            elif (op_str == "beq" or op_str == "bne"):
-                address = str( 4*(programCounter + immed_str + 1) )
-                addressStr = "Addr_" +  address.zfill(4)
-                addressesThatNeedLabels.append(programCounter + immed_str + 1)
-                tempOutputList[programCounter] = "\t" + op_str + " " + rt_str + ", " + rs_str + ", " + addressStr + "\n"
+            if  (i_type_op_codes.get(my_itype.op) is None) or (register_dict.get(my_itype.rs) is None) or (register_dict.get(my_itype.rt) is None):
+                str2 = (f[lineCounter-1]).strip()
+                print("Cannot dissassemble " + str2 + " at line " + str(lineCounter) + " due to invalid input.")
+                hasError = True
             else:
-                tempOutputList[programCounter] = "\t" + op_str + " " + rt_str + ", " + rs_str + ", " + str(immed_str) + "\n"
+                op_str = i_type_op_codes[my_itype.op]
+                rs_str = register_dict[my_itype.rs]
+                rt_str = register_dict[my_itype.rt]
+                immed_str = int(my_itype.immed,2)
+
+                # if the immed_str should be a negative signed value
+                if (immed_str > 60000):
+                    immed_str = immed_str-65536
+
+                if (op_str == "lw" or op_str == "sw"):
+                    tempOutputList[programCounter] = "\t" + op_str + " " + rt_str + ", " + str(immed_str) + "(" + rs_str + ")" + "\n"
+
+                elif (op_str == "beq" or op_str == "bne"):
+                    address = str( 4*(programCounter + immed_str + 1) )
+                    addressStr = "Addr_" +  address.zfill(4)
+                    addressesThatNeedLabels.append(programCounter + immed_str + 1)
+                    tempOutputList[programCounter] = "\t" + op_str + " " + rt_str + ", " + rs_str + ", " + addressStr + "\n"
+
+                else:
+                    tempOutputList[programCounter] = "\t" + op_str + " " + rt_str + ", " + rs_str + ", " + str(immed_str) + "\n"
         programCounter += 1
+        lineCounter += 1
 
+    if not hasError:
+        fileOut = open(file.name[:-4] + ".s", "w")
 
-    fileOut = open(file.name[:-4] + ".s", "w")
+        for i in range (0,programCounter):
+            if i in addressesThatNeedLabels:
+                address = str(i*4)
+                addressStr = "Addr_" +  address.zfill(4) + ":\n"
+                fileOut.write(addressStr)
 
-    for i in range (0,programCounter):
-        if i in addressesThatNeedLabels:
-            address = str(i*4)
-            addressStr = "Addr_" +  address.zfill(4) + ":\n"
-            fileOut.write(addressStr)
+            fileOut.write(tempOutputList[i])
+        fileOut.close
 
-        fileOut.write(tempOutputList[i])
-
-    fileOut.close
 
 if __name__ == "__main__":
     #inputStr = input("Please input a textfile: ")
