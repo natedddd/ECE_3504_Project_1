@@ -6,6 +6,7 @@ Nate Doggett
 Description: This program disassembles MIPS machines code and coverts
 the content into human-readable MIPS assembly
 """
+import sys
 class RType:
     """ RType instruction type """
     def __init__(self):
@@ -102,8 +103,11 @@ def main(inputStr):
                         '11110':'$fp',
                         '11111':'$ra'}
 
-
-    file = open(inputStr, 'r')
+    try:
+        file = open(inputStr, 'r')
+    except:
+        print("Cannot dissassemble. File does not exist.")
+        return
     f = file.readlines()
     file.close()
 
@@ -119,10 +123,14 @@ def main(inputStr):
             print("Cannot dissassemble " + str1 + " at line " + str(lineCounter) + " due to invalid length.")
             hasError = True
         else:
-            res = "{0:08b}".format(int(str1, 16)) # converts the hex string into binary
-            resFilled = res.zfill(32) # fills the result with any leading zeros
-            binaryEquiv.append(resFilled)
-            lineCounter += 1
+            try:
+                res = "{0:08b}".format(int(str1, 16)) # converts the hex string into binary
+                resFilled = res.zfill(32) # fills the result with any leading zeros
+                binaryEquiv.append(resFilled)
+            except:
+                hasError = True
+                print("Cannot dissassemble " + str1 + " at line " + str(lineCounter) + " due to invalid length.")
+        lineCounter += 1
 
     my_rtype = RType()
     my_itype = IType()
@@ -152,6 +160,7 @@ def main(inputStr):
                 temp_int = int(my_rtype.funct,2)
                 funct_str = hex(temp_int)
 
+                # only has a different format if a shift amount is given
                 if (shamt_str == 0):
                     tempOutputList[programCounter] = "\t" + op_str + " " + rd_str + ", " + rs_str + ", " + rt_str  + "\n"
                 else:
@@ -173,15 +182,20 @@ def main(inputStr):
                 if (immed_str > 60000):
                     immed_str = immed_str-65536
 
+                # format for lw and sw
                 if (op_str == "lw" or op_str == "sw"):
                     tempOutputList[programCounter] = "\t" + op_str + " " + rt_str + ", " + str(immed_str) + "(" + rs_str + ")" + "\n"
 
+                # format for beq or bne
                 elif (op_str == "beq" or op_str == "bne"):
-                    address = str( 4*(programCounter + immed_str + 1) )
-                    addressStr = "Addr_" +  address.zfill(4)
+                    address = 4*(programCounter + immed_str + 1)
+                    hexAddress = str( hex(address) )
+                    hexAddress = hexAddress[2:]
+                    addressStr = "Addr_" +  hexAddress.zfill(4)
                     addressesThatNeedLabels.append(programCounter + immed_str + 1)
                     tempOutputList[programCounter] = "\t" + op_str + " " + rt_str + ", " + rs_str + ", " + addressStr + "\n"
 
+                # all other IType formats
                 else:
                     tempOutputList[programCounter] = "\t" + op_str + " " + rt_str + ", " + rs_str + ", " + str(immed_str) + "\n"
         programCounter += 1
@@ -192,8 +206,10 @@ def main(inputStr):
 
         for i in range (0,programCounter):
             if i in addressesThatNeedLabels:
-                address = str(i*4)
-                addressStr = "Addr_" +  address.zfill(4) + ":\n"
+                address = 4*i
+                hexAddress = str( hex(address) )
+                hexAddress = hexAddress[2:]
+                addressStr = "Addr_" +  hexAddress.zfill(4) + ":\n"
                 fileOut.write(addressStr)
 
             fileOut.write(tempOutputList[i])
@@ -201,6 +217,7 @@ def main(inputStr):
 
 
 if __name__ == "__main__":
-    #inputStr = input("Please input a textfile: ")
-    inputStr = "test.obj"
-    main(inputStr)      
+    if len(sys.argv) != 2:
+        print("Cannot dissassemble this arguement.")
+    else:
+        main(sys.argv[1])      
